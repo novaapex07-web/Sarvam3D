@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f3efe6" />
+    <meta name="color-scheme" content="light" />
+    <meta
+      name="description"
+      content="OTHERFORM — a quiet room for strange objects. An ultra-light surreal 3D gallery built for mobile."
+    />
+    <title>OTHERFORM — Surreal 3D Gallery</title>
+  </head>
+  <body>
+    <!-- Fixed WebGL stage. Sits behind all content. -->
+    <canvas id="gl" aria-hidden="true"></canvas>
+
+    <!-- Rendered only when WebGL is unavailable. -->
+    <div id="fallback" class="fallback" hidden aria-hidden="true">
+      <div class="fallback__mark" aria-hidden="true"></div>
+    </div>
+
+    <div class="progress" aria-hidden="true">
+      <span class="progress__fill"></span>
+    </div>
+
+    <header class="masthead">
+      <span class="masthead__word">OTHERFORM</span>
+      <span class="masthead__meta">Gallery&nbsp;/&nbsp;MMXXVI</span>
+    </header>
+
+    <main id="content">
+      <!-- 01 — Opening -->
+      <section class="scene scene--hero" data-chapter="01">
+        <div class="scene__inner" data-reveal>
+          <p class="label">01 &mdash; Opening</p>
+          <h1 class="display">OTHER<br /><em>FORM</em></h1>
+          <p class="lede">
+            A quiet room for strange objects. Chrome, glass and organic geometry,
+            lit as if the studio never closed.
+          </p>
+          <p class="hint" aria-hidden="true">Scroll</p>
+        </div>
+      </section>
+
+      <!-- 02 — Interaction -->
+      <section class="scene scene--interact" data-chapter="02">
+        <div class="scene__inner scene__inner--right" data-reveal>
+          <p class="label">02 &mdash; Interaction</p>
+          <h2 class="headline">Hold the form.</h2>
+          <p class="body">
+            Drag across the sculpture to turn it in your hand. On a touch screen,
+            a sideways drag rotates the object while vertical drags keep scrolling
+            the page exactly as they should.
+          </p>
+        </div>
+      </section>
+
+      <!-- 03 — Scroll transformation -->
+      <section class="scene scene--transform" data-chapter="03">
+        <div class="scene__inner" data-reveal>
+          <p class="label">03 &mdash; Metamorphosis</p>
+          <h2 class="headline">It does not stay still.</h2>
+          <p class="body">
+            Scrolling changes the sculpture's scale, position, rotation and form.
+            One continuous gesture, no cut, no loading screen.
+          </p>
+        </div>
+      </section>
+
+      <!-- 04 — Second composition -->
+      <section class="scene scene--counter" data-chapter="04">
+        <div class="scene__inner scene__inner--right" data-reveal>
+          <p class="label">04 &mdash; Counterform</p>
+          <h2 class="headline">Organic meets glass.</h2>
+          <p class="body">
+            A second composition sets a matte, clay-like mass against a clear ring
+            and a single chrome sliver &mdash; weight answering weightlessness.
+          </p>
+        </div>
+      </section>
+
+      <!-- 05 — Closing -->
+      <section class="scene scene--closing" data-chapter="05">
+        <div class="scene__inner scene__inner--center" data-reveal>
+          <p class="label">05 &mdash; Credits</p>
+          <h2 class="headline headline--tight">Thank you for looking.</h2>
+          <dl class="credits">
+            <div>
+              <dt>Concept &amp; build</dt>
+              <dd>OTHERFORM Studio</dd>
+            </div>
+            <div>
+              <dt>Engine</dt>
+              <dd>Three.js &middot; Vite &middot; vanilla JS</dd>
+            </div>
+            <div>
+              <dt>Materials</dt>
+              <dd>Procedural &mdash; no imported models or textures</dd>
+            </div>
+          </dl>
+          <button class="replay" type="button" data-replay>
+            <span>Replay the room</span>
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <noscript>
+      <div class="fallback fallback--inline">
+        <p>OTHERFORM needs JavaScript and WebGL to show its sculptures.</p>
+      </div>
+    </noscript>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
