@@ -1,9 +1,9 @@
 /* ------------------------------------------------------------------
    OTHERFORM — 3D orchestrator.
    One renderer, one scene, two compositions. Scroll drives a global
-   progress value; pointer drag adds a rotation offset; a quality
-   manager adapts pixel ratio, LOD and particles from measured frame
-   time. Rendering pauses when the tab is hidden.
+   progress value; the pointer both turns the cube and nudges it around;
+   a quality manager adapts pixel ratio, LOD and dust from measured frame
+   time. Rendering pauses while the tab is hidden.
    ------------------------------------------------------------------ */
 import {
   ACESFilmicToneMapping,
@@ -13,7 +13,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { createStudioEnvironment } from "./env.js";
-import { createCounterform, createHeroSculpture } from "./sculpture.js";
+import { createCubeCluster, createHeroCube } from "./sculpture.js";
 import { QualityManager } from "./quality.js";
 
 const FOV = 46;
@@ -23,7 +23,7 @@ const MAX_DISTANCE = 10.5;
 
 /* Compositions sit above the optical centre so the editorial text, which
    is anchored to the lower part of each section on mobile, stays clear. */
-const HERO_Y = 0.8;
+const HERO_Y = 0.95;
 const COUNTER_Y = 0.62;
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -88,8 +88,8 @@ export function initApp({ canvas, reducedMotion = false }) {
   const envMap = createStudioEnvironment(renderer);
   scene.environment = envMap;
 
-  const hero = createHeroSculpture(envMap);
-  const counter = createCounterform(envMap);
+  const hero = createHeroCube(envMap);
+  const counter = createCubeCluster(envMap);
   scene.add(hero.group, hero.shadow, counter.group, counter.shadow);
 
   /* ---- sizing ---- */
@@ -137,11 +137,21 @@ export function initApp({ canvas, reducedMotion = false }) {
   readScroll();
   window.addEventListener("scroll", readScroll, { passive: true });
 
-  /* ---- pointer drag ---- */
+  /* ---- pointer: turn it, push it, press it ---- */
   let dragYaw = 0;
   let dragPitch = 0;
   let curYaw = 0;
   let curPitch = 0;
+
+  let shiftX = 0; // target offset while dragging
+  let shiftY = 0;
+  let curShiftX = 0; // smoothed offset actually applied
+  let curShiftY = 0;
+
+  let pressTarget = 0; // 1 while a pointer is down
+  let press = 0; // smoothed
+  let pulse = 0; // decaying kick fired on press and on release
+
   let activePointer = null;
   let lastX = 0;
   let lastY = 0;
@@ -151,6 +161,8 @@ export function initApp({ canvas, reducedMotion = false }) {
     activePointer = event.pointerId;
     lastX = event.clientX;
     lastY = event.clientY;
+    pressTarget = 1;
+    pulse = 1;
     if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
     canvas.classList.add("is-dragging");
   }
@@ -167,12 +179,17 @@ export function initApp({ canvas, reducedMotion = false }) {
        scroll the page instead of grabbing the object. */
     if (event.pointerType === "mouse") {
       dragPitch = clamp(dragPitch + dy * 0.004, -0.7, 0.7);
+      shiftY = clamp(shiftY + dy * 0.0022, -0.45, 0.45);
     }
+    /* The cube also drifts with the drag, then springs home. */
+    shiftX = clamp(shiftX + dx * 0.0022, -0.5, 0.5);
   }
 
   function endPointer(event) {
     if (event.pointerId !== activePointer) return;
     activePointer = null;
+    pressTarget = 0;
+    pulse = Math.max(pulse, 0.8);
     canvas.classList.remove("is-dragging");
   }
 
@@ -196,47 +213,76 @@ export function initApp({ canvas, reducedMotion = false }) {
     const dt = Math.min(0.05, deltaMs / 1000);
     if (!reducedMotion) elapsed += dt;
 
-    /* smooth scroll + drag toward their targets */
+    /* smooth everything toward its target */
     const k = reducedMotion ? 1 : 1 - Math.exp(-dt * 7);
     progress += (targetProgress - progress) * k;
+
     const kd = reducedMotion ? 1 : 1 - Math.exp(-dt * 9);
     curYaw += (dragYaw - curYaw) * kd;
     curPitch += (dragPitch - curPitch) * kd;
+
+    press += (pressTarget - press) * (reducedMotion ? 1 : 1 - Math.exp(-dt * 14));
+    pulse *= reducedMotion ? 0.8 : Math.exp(-dt * 4.5);
+
+    /* the drift springs home once the finger lifts */
+    if (activePointer === null) {
+      const decay = reducedMotion ? 0.8 : Math.exp(-dt * 3.5);
+      shiftX *= decay;
+      shiftY *= decay;
+    }
+    const ks = reducedMotion ? 1 : 1 - Math.exp(-dt * 9);
+    curShiftX += (shiftX - curShiftX) * ks;
+    curShiftY += (shiftY - curShiftY) * ks;
 
     const p = progress;
     const t = elapsed;
     const idle = reducedMotion ? 0 : 1;
 
-    /* ---------- composition 01 : chrome + glass ---------- */
+    /* ---------- composition 01 : the floating cube ---------- */
     const heroOut = smooth(0.44, 0.62, p);
     hero.group.visible = heroOut < 0.999;
 
+    /* touch response: a squash while held, an overshoot on release */
+    const react = (press * 0.1 + pulse * 0.12) * (reducedMotion ? 0.5 : 1);
+    const heroScale = lerp(0.92, 1.12, smooth(0.05, 0.45, p)) * lerp(1, 0.55, heroOut);
+
     hero.group.position.set(
-      lerp(0, -0.2, smooth(0.15, 0.5, p)) - heroOut * 1.1,
-      HERO_Y + lerp(0, 0.25, smooth(0, 0.45, p)) + heroOut * 1.8,
+      lerp(0, -0.2, smooth(0.15, 0.5, p)) - heroOut * 1.1 + curShiftX,
+      HERO_Y +
+        lerp(0, 0.25, smooth(0, 0.45, p)) +
+        heroOut * 1.8 +
+        curShiftY +
+        idle * Math.sin(t * 0.6) * 0.12,
       lerp(0, -0.3, smooth(0.15, 0.5, p)) - heroOut * 1.4
     );
 
-    const heroScale = lerp(0.9, 1.1, smooth(0.05, 0.45, p)) * lerp(1, 0.55, heroOut);
-    hero.group.scale.setScalar(heroScale);
-
-    hero.group.rotation.set(
-      p * 0.45 + curPitch * 0.8 + idle * Math.sin(t * 0.12) * 0.05,
-      p * 2.4 + curYaw + idle * Math.sin(t * 0.17) * 0.1,
-      p * -0.3
+    hero.group.scale.set(
+      heroScale * (1 + react * 0.5),
+      heroScale * (1 - react * 0.6),
+      heroScale * (1 + react * 0.5)
     );
 
-    /* form change: the noise amplitude and the knot's stretch evolve */
-    hero.uniforms.uAmp.value = lerp(0.06, 0.26, smooth(0.22, 0.65, p));
-    hero.uniforms.uFreq.value = lerp(1.25, 2.1, smooth(0.22, 0.65, p));
-    const stretch = smooth(0.3, 0.7, p);
-    hero.knot.scale.set(lerp(1, 1.26, stretch), lerp(1, 0.86, stretch), 1);
-    hero.update(t);
+    hero.group.rotation.set(
+      p * 0.5 + curPitch * 0.8 + idle * Math.sin(t * 0.12) * 0.06 + pulse * 0.18,
+      p * 2.2 + curYaw + idle * t * 0.16,
+      p * -0.28 + idle * Math.sin(t * 0.23) * 0.05
+    );
 
-    hero.shadow.position.set(hero.group.position.x, HERO_Y - 1.5, hero.group.position.z);
+    /* "form" change on scroll: a slow non-uniform stretch of the cube */
+    const stretch = smooth(0.28, 0.68, p);
+    hero.cube.scale.set(
+      lerp(1, 1.18, stretch),
+      lerp(1, 0.86, stretch),
+      lerp(1, 1.06, stretch)
+    );
+
+    /* the chrome brightens a little while it is being handled */
+    hero.material.envMapIntensity = 1.45 + press * 0.55 + pulse * 0.3;
+
+    hero.shadow.position.set(hero.group.position.x, HERO_Y - 1.35, hero.group.position.z);
     hero.shadow.material.opacity = 0.9 * (1 - heroOut);
 
-    /* ---------- composition 02 : organic + glass ---------- */
+    /* ---------- composition 02 : the cube cluster ---------- */
     const bIn = smooth(0.6, 0.78, p);
     const bOut = smooth(0.88, 0.98, p);
     counter.group.visible = bIn > 0.002 && bOut < 0.999;
@@ -252,6 +298,14 @@ export function initApp({ canvas, reducedMotion = false }) {
       lerp(0.8, -0.12, bIn) + curYaw * 0.35 + idle * Math.sin(t * 0.15) * 0.07,
       0
     );
+
+    /* each cube turns a little on its own */
+    counter.cubes.forEach((mesh, i) => {
+      const phase = i * 1.7;
+      mesh.rotation.y += idle * dt * (0.18 - i * 0.04);
+      mesh.position.y += idle * Math.sin(t * 0.7 + phase) * 0.0006;
+    });
+
     counter.update(t);
 
     counter.shadow.position.set(counter.group.position.x, COUNTER_Y - 1.15, counter.group.position.z);
@@ -319,6 +373,10 @@ export function initApp({ canvas, reducedMotion = false }) {
     replay() {
       dragYaw = 0;
       dragPitch = 0;
+      shiftX = 0;
+      shiftY = 0;
+      pressTarget = 0;
+      pulse = 0;
       elapsed = 0;
       readScroll();
       if (document.hidden === false) start();

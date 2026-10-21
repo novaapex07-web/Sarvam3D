@@ -1,8 +1,8 @@
 # OTHERFORM
 
-An ultra-light surreal 3D gallery. One fixed WebGL stage, two sculptural
-compositions, a warm ivory room — and an initial network transfer of about
-**128 KB gzipped**, roughly an eighth of the 1,000 KB budget.
+An ultra-light surreal 3D gallery. One fixed WebGL stage, a floating rounded
+cube you can push around, a warm ivory room — and an initial network transfer
+of about **122 KB gzipped**, roughly an eighth of the 1,000 KB budget.
 
 Built with Vite, vanilla JavaScript and Three.js. No React, no GSAP, no UI
 framework, no imported 3D models, no textures, no remote fonts, no
@@ -45,10 +45,10 @@ Five chapters, driven by one continuous scroll:
 
 | # | Chapter | What happens |
 |---|---------|--------------|
-| 01 | Opening | Chrome torus knot threaded through a thin glass halo, organic mass at the core |
-| 02 | Interaction | The sculpture follows a horizontal drag; on touch, vertical drags keep scrolling |
-| 03 | Metamorphosis | Scroll changes scale, position, rotation and form (noise amplitude + stretch) |
-| 04 | Counterform | Second composition: matte clay mass, clear glass ring, chrome sliver |
+| 01 | Opening | A single rounded, polished-chrome cube floating in the room |
+| 02 | Interaction | The cube turns with a horizontal drag, presses back under your finger, drifts with the movement and springs home |
+| 03 | Metamorphosis | Scroll changes the cube's scale, position, rotation and form (a slow non-uniform stretch) |
+| 04 | Counterform | Second composition: three rounded cubes — matte clay, clear glass, polished chrome |
 | 05 | Credits | Minimal close with a replay control that returns you to the opening |
 
 The 3D stage is a single fixed `<canvas>` behind the content, so there is one
@@ -73,7 +73,8 @@ rather than a performance claim.
 
 - Warm ivory gallery background, painted in CSS (a light gradient plus a
   low vignette) — no background texture is downloaded.
-- Chrome, translucent glass and noise-displaced organic forms.
+- A floating rounded cube in polished chrome; translucent glass and matte,
+  noise-displaced clay solids in the second composition.
 - Procedural studio environment: a 512×256 equirectangular canvas with a
   hard horizon and two strip lights, baked once through `PMREMGenerator`
   and used for all reflections. No HDR file, no real-time reflection pass.
@@ -105,6 +106,23 @@ otherform/
 └─ SIZE_REPORT.md           measured sizes, timings and caveats
 ```
 
+## The object
+
+The primary object is a single **rounded cube** built with
+`RoundedBoxGeometry` — procedurally generated, no imported model. It floats on
+a slow bob, turns continuously, and responds to the pointer in three ways at
+once:
+
+- **turn** — a horizontal drag spins it (with a touch screen, vertical drags
+  still scroll the page);
+- **move** — the same drag nudges it sideways and vertically, and it springs
+  back home when you let go;
+- **react** — holding squashes it along the vertical axis, releasing gives a
+  small overshoot, and the chrome brightens slightly while it is being handled.
+
+The second composition gathers three smaller rounded cubes — matte clay,
+clear glass and polished chrome — as a contrast to the single hero object.
+
 ## How the rendering stays cheap
 
 **Custom shaders, zero extra passes.** Organic forms and glass edges are
@@ -119,18 +137,18 @@ target.
 PMREM-baked environment map generated from a canvas, not from real-time
 cube cameras.
 
-**Geometry LODs.** The icosphere-based organic forms and the rings each keep
-three pre-built LODs, so a quality change swaps a `BufferGeometry`
-reference instead of allocating mid-frame.
+**Geometry LODs.** Every rounded cube keeps three pre-built LODs (300 / 1,452 /
+3,468 triangles), so a quality change swaps a `BufferGeometry` reference
+instead of allocating mid-frame.
 
 **Adaptive quality.** `quality.js` watches a smoothed frame time and moves
 between three tiers:
 
-| Tier | Pixel ratio cap | Detail | Dust |
-|------|-----------------|--------|------|
-| 0 low | 1.0 | 1,620-triangle blobs | off |
-| 1 balanced | 1.5 | 5,780-triangle blobs | on |
-| 2 high | 2.0 | 12,500-triangle blobs | on |
+| Tier | Pixel ratio cap | Cube subdivision | Dust |
+|------|-----------------|------------------|------|
+| 0 low | 1.0 | 300 triangles | off |
+| 1 balanced | 1.5 | 1,452 triangles | on |
+| 2 high | 2.0 | 3,468 triangles | on |
 
 It steps down if the smoothed frame time stays above ~26 ms and steps up
 only when it is comfortably under ~13.5 ms, with a cooldown and a cap on
@@ -153,6 +171,10 @@ hidden.
   composition (text re-centres, the camera fits the sculpture to the viewport
   aspect).
 - The canvas is `aria-hidden`; all copy is real HTML text.
+- Touch feedback is direct manipulation: press squashes the cube, a drag also
+  nudges it, and it springs back when released. Under
+  `prefers-reduced-motion` the ambient drift stops but this feedback stays
+  (at half strength), because it is a response to the visitor's own action.
 - `touch-action: pan-y` on the canvas means vertical touch scrolling is never
   intercepted — only horizontal drags rotate the object.
 - `prefers-reduced-motion: reduce` disables the idle drift, the intro fade and

@@ -1,66 +1,38 @@
 /* The two sculptural compositions.
-   Geometry is procedural (knots, icospheres, tori) and each heavy mesh
-   keeps a pre-built set of LODs so the quality manager can swap detail
-   without allocating during the frame.
 
-   01  chrome-and-glass : a chrome torus knot threaded through a thin
-                           glass halo, with an organic mass at its core.
-   02  counterform      : a matte clay-like mass against a clear ring and
-                           a single chrome sliver. */
+   01  the cube : a single rounded, polished-chrome cube, floating in the
+                   room. It is the object the visitor pushes around.
+   02  the cluster : three rounded cubes of contrasting material — matte
+                   clay, clear glass and polished chrome — gathered together.
+
+   Geometry is procedural (RoundedBoxGeometry — no imported model), and each
+   mesh keeps a pre-built set of LODs so the quality manager can swap detail
+   without allocating during a frame. */
 import {
   AdditiveBlending,
   BufferAttribute,
   BufferGeometry,
-  CapsuleGeometry,
   Color,
   DoubleSide,
   Group,
-  IcosahedronGeometry,
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
   Points,
   PointsMaterial,
-  TorusGeometry,
-  TorusKnotGeometry,
 } from "three";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { createChrome, createGlass, createOrganic } from "./materials.js";
 import { makeDotTexture, makeShadowTexture } from "./textures.js";
 
-/* ---- geometry builders, indexed by quality tier 0..2 ---- */
+/* Rounded-box subdivision per quality tier: 300 / 1452 / 3468 triangles. */
+const SEG_LOD = [3, 5, 8];
 
-function buildKnot(tier) {
-  const [tubular, radial] = [
-    [130, 16],
-    [190, 22],
-    [250, 28],
-  ][tier];
-  return new TorusKnotGeometry(1.0, 0.3, tubular, radial, 2, 3);
-}
+const CUBE_SIZE = 1.7;
+const CUBE_RADIUS = 0.26;
 
-/* IcosahedronGeometry subdivides into 20 * (detail + 1)^2 triangles, so the
-   detail values have to be large to read as an organic mass rather than a
-   faceted rock: 8 -> 1620, 16 -> 5780, 24 -> 12500 triangles. */
-function buildBlob(tier, radius) {
-  return new IcosahedronGeometry(radius, [8, 16, 24][tier]);
-}
-
-function buildRing(tier, radius, tube) {
-  const [radial, tubular] = [
-    [10, 90],
-    [14, 130],
-    [18, 170],
-  ][tier];
-  return new TorusGeometry(radius, tube, radial, tubular);
-}
-
-function buildSliver(tier) {
-  const [capSeg, radialSeg] = [
-    [3, 10],
-    [5, 14],
-    [8, 18],
-  ][tier];
-  return new CapsuleGeometry(0.055, 0.5, capSeg, radialSeg);
+function buildCube(tier, size = CUBE_SIZE, radius = CUBE_RADIUS) {
+  return new RoundedBoxGeometry(size, size, size, SEG_LOD[tier], radius);
 }
 
 /* ---- shared pieces ---- */
@@ -106,118 +78,92 @@ function makeContactShadow() {
   return mesh;
 }
 
-/* ---- composition 01 : chrome + glass ---- */
+/* ---- composition 01 : the floating cube ---- */
 
-export function createHeroSculpture(envMap) {
+export function createHeroCube(envMap) {
   const group = new Group();
 
   const chrome = createChrome(envMap);
-  const glass = createGlass(envMap);
-  const organic = createOrganic(envMap, {
-    color: 0xcabda4,
-    roughness: 0.55,
-    amp: 0.06,
-    freq: 1.25,
-    speed: 0.16,
-  });
-
-  const knot = new Mesh(buildKnot(1), chrome);
-
-  const halo = new Mesh(buildRing(1, 1.42, 0.05), glass);
-  halo.rotation.set(1.16, 0.36, 0.24);
-
-  const core = new Mesh(buildBlob(1, 0.5), organic);
+  const cube = new Mesh(buildCube(1), chrome);
   const dust = makeDust(110);
 
-  group.add(knot, halo, core, dust);
+  group.add(cube, dust);
 
   const shadow = makeContactShadow();
 
-  const lods = {
-    knot: [buildKnot(0), buildKnot(1), buildKnot(2)],
-    halo: [buildRing(0, 1.42, 0.05), buildRing(1, 1.42, 0.05), buildRing(2, 1.42, 0.05)],
-    core: [buildBlob(0, 0.5), buildBlob(1, 0.5), buildBlob(2, 0.5)],
-  };
+  const lods = [buildCube(0), buildCube(1), buildCube(2)];
   let detail = 1;
 
   function setDetail(tier) {
     if (tier === detail) return;
     detail = tier;
-    knot.geometry = lods.knot[tier];
-    halo.geometry = lods.halo[tier];
-    core.geometry = lods.core[tier];
+    cube.geometry = lods[tier];
     dust.visible = tier >= 1;
   }
 
   return {
     group,
     shadow,
-    knot,
-    halo,
-    core,
+    cube,
+    material: chrome,
     dust,
-    uniforms: organic.userData.uniforms,
     setDetail,
-    update(elapsed) {
-      organic.userData.uniforms.uTime.value = elapsed;
-    },
+    update() {},
   };
 }
 
-/* ---- composition 02 : matte mass + glass ring + chrome sliver ---- */
+/* ---- composition 02 : the cube cluster ---- */
 
-export function createCounterform(envMap) {
+export function createCubeCluster(envMap) {
   const group = new Group();
 
   const clay = createOrganic(envMap, {
-    color: 0xb0a086,
+    color: 0xbfae94,
     roughness: 0.95,
     metalness: 0.0,
-    amp: 0.13,
-    freq: 0.9,
+    amp: 0.05,
+    freq: 1.15,
     speed: 0.1,
   });
   const glass = createGlass(envMap, 0xdde7ec);
   const chrome = createChrome(envMap);
 
-  const stone = new Mesh(buildBlob(1, 0.92), clay);
-  stone.scale.set(1.1, 0.96, 1.03);
-  stone.position.set(-0.42, 0.06, 0);
+  const specs = [
+    { material: clay, size: 1.05, radius: 0.2, position: [-0.52, 0.04, 0], rotation: [0.2, 0.5, 0.1] },
+    { material: glass, size: 0.82, radius: 0.16, position: [0.44, 0.34, 0.16], rotation: [-0.25, -0.4, 0.2] },
+    { material: chrome, size: 0.52, radius: 0.1, position: [0.3, -0.46, 0.3], rotation: [0.5, 0.3, -0.3] },
+  ];
 
-  const ring = new Mesh(buildRing(1, 0.98, 0.1), glass);
-  ring.rotation.set(1.24, 0.42, 0.18);
-  ring.position.set(0.08, 0.16, 0);
-
-  const sliver = new Mesh(buildSliver(1), chrome);
-  sliver.position.set(0.52, -0.4, 0.24);
-  sliver.rotation.set(0.5, 0.4, 0.75);
-
-  group.add(stone, ring, sliver);
+  const cubes = specs.map((spec) => {
+    const mesh = new Mesh(buildCube(1, spec.size, spec.radius), spec.material);
+    mesh.position.set(...spec.position);
+    mesh.rotation.set(...spec.rotation);
+    group.add(mesh);
+    return mesh;
+  });
 
   const shadow = makeContactShadow();
   shadow.scale.setScalar(0.66);
 
-  const lods = {
-    stone: [buildBlob(0, 0.92), buildBlob(1, 0.92), buildBlob(2, 0.92)],
-    ring: [buildRing(0, 0.98, 0.1), buildRing(1, 0.98, 0.1), buildRing(2, 0.98, 0.1)],
-    sliver: [buildSliver(0), buildSliver(1), buildSliver(2)],
-  };
+  const lods = specs.map((spec) => [
+    buildCube(0, spec.size, spec.radius),
+    buildCube(1, spec.size, spec.radius),
+    buildCube(2, spec.size, spec.radius),
+  ]);
   let detail = 1;
 
   function setDetail(tier) {
     if (tier === detail) return;
     detail = tier;
-    stone.geometry = lods.stone[tier];
-    ring.geometry = lods.ring[tier];
-    sliver.geometry = lods.sliver[tier];
+    cubes.forEach((mesh, i) => {
+      mesh.geometry = lods[i][tier];
+    });
   }
 
   return {
     group,
     shadow,
-    stone,
-    ring,
-    sliver,
+    cubes,
     uniforms: clay.userData.uniforms,
     setDetail,
     update(elapsed) {

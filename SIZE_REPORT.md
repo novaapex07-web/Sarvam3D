@@ -7,9 +7,9 @@ Everything below was measured on the actual production build produced by
 
 | | Measured | Budget | Used |
 |---|---|---|---|
-| Initial transfer, brotli | **105.5 KB** | 1,000 KB | 10.5% |
-| Initial transfer, gzip | **127.6 KB** | 1,000 KB | 12.8% |
-| Initial transfer, uncompressed | 501.1 KB | — | — |
+| Initial transfer, brotli | **101.3 KB** | 1,000 KB | 10.1% |
+| Initial transfer, gzip | **122.5 KB** | 1,000 KB | 12.3% |
+| Initial transfer, uncompressed | 481.7 KB | — | — |
 | Initial requests | **3** | — | — |
 | Third-party requests | **0** | — | — |
 
@@ -31,10 +31,10 @@ requests, because there are no such assets — all art is generated at runtime.
 
 | File | Raw | gzip | brotli |
 |---|---:|---:|---:|
-| `dist/index.html` | 4,395 | 1,520 | 1,140 |
+| `dist/index.html` | 4,465 | 1,558 | 1,170 |
 | `dist/assets/index-CfVKFyDC.css` | 5,088 | 1,944 | 1,684 |
-| `dist/assets/index-Boc8O8H0.js` | 503,691 | 127,191 | 105,211 |
-| **Total (3 files)** | **513,174** | **130,655** | **108,035** |
+| `dist/assets/index-DJ0nK7fC.js` | 483,711 | 121,982 | 100,915 |
+| **Total (3 files)** | **493,264** | **125,484** | **103,769** |
 
 Request types observed on load: `document`, `stylesheet`, `script`. Nothing else.
 
@@ -46,14 +46,14 @@ what tree-shaking buys:
 | Build | Raw | gzip | brotli |
 |---|---:|---:|---:|
 | Three.js, namespace import (no tree-shaking) | 680,487 | 173,489 | 142,375 |
-| **Shipped bundle** (tree-shaken Three.js + app) | **503,691** | **127,191** | **105,211** |
-| Saving from tree-shaking | −176,796 (−26.0%) | −46,298 (−26.7%) | −37,164 (−26.1%) |
+| **Shipped bundle** (tree-shaken Three.js + app) | **483,711** | **121,982** | **100,915** |
+| Saving from tree-shaking | −196,776 (−28.9%) | −51,507 (−29.7%) | −41,460 (−29.1%) |
 
 The application's own source — all of `src/`, `index.html`, `vite.config.js` —
 is about 45 KB unminified across 11 files, so on the order of 10–15 KB of the
 shipped chunk is first-party code and the remainder is the tree-shaken Three.js
-core (`WebGLRenderer`, the PBR material system, the geometry generators, and
-`PMREMGenerator`).
+core: `WebGLRenderer`, the PBR material system, `PMREMGenerator`, and
+`RoundedBoxGeometry`.
 
 Notably absent: React, GSAP, any UI framework, any loader, any image or font
 file, and any HDR environment map. The environment map is a 512×256 canvas
@@ -62,16 +62,16 @@ kilobytes of code rather than a few hundred kilobytes of asset.
 
 ## 5. Initial scene load behaviour
 
-Measured in headless Chrome 153 at a 390×844 viewport, device pixel ratio 2,
-with the quality tier pinned to 1. Absolute numbers on this software-rendered
+Measured in headless Chrome at a 390×844 viewport, device pixel ratio 2, with
+the quality tier pinned to 1. Absolute numbers on this software-rendered
 environment are slow; the ordering and the effect of each step are what matter.
 
 | Milestone | Time |
 |---|---:|
-| First paint / first contentful paint | 712 ms |
-| `DOMContentLoaded` | 701 ms |
-| `load` | 701 ms |
-| First rendered 3D frame (`#gl` gains `.is-ready`) | 5,613 ms |
+| First paint / first contentful paint | 632 ms |
+| `DOMContentLoaded` | 626 ms |
+| `load` | 627 ms |
+| First rendered 3D frame (`#gl` gains `.is-ready`) | 3,202 ms |
 
 Behaviour:
 
@@ -79,8 +79,8 @@ Behaviour:
    as CSS is applied — there is no loading screen and no blocking intro.
 2. Scene construction (geometry, materials, the PMREM bake) is deferred by two
    animation frames, so it no longer blocks `DOMContentLoaded`. This was a real
-   fix: before deferral, `DOMContentLoaded` was 1,706 ms instead of 701 ms,
-   because the whole scene was built synchronously during boot.
+   fix: before deferral, `DOMContentLoaded` landed at over 1.7 s instead of
+   ~0.63 s, because the whole scene was built synchronously during boot.
 3. The canvas is transparent until the first frame is rendered, then fades in
    over 1.1 s. Until then the page reads as a plain ivory page with text.
 
@@ -95,11 +95,18 @@ system working under load.
 
 | Scenario | Result |
 |---|---:|
-| Mid-page, tier 2 pinned, software rasteriser | ~24 fps |
-| Top of page (full-screen glass + chrome), tier 2 pinned | ~1–3 fps |
+| Hero cube on screen, tier 2 pinned, software rasteriser | ~6.0 fps |
+| Transform chapter, tier 2 pinned, software rasteriser | ~5.5 fps |
+| Hero cube on screen, tier 1 pinned, software rasteriser | ~9.6 fps |
+| Transform chapter, tier 1 pinned, software rasteriser | ~8.4 fps |
 | Auto tier under software rendering | adapted down to **tier 0** (pixel ratio 1.0, low LOD, dust off) |
-| Device pixel ratio actually applied at tier 2 | 2.0 (drawing buffer 780×1688 for a 390×844 viewport) |
-| Device pixel ratio actually applied after auto-downgrade | 1.0 (drawing buffer 390×844) |
+| Device pixel ratio applied at tier 2 | 2.0 (drawing buffer 780×1688 for a 390×844 viewport) |
+| Device pixel ratio applied after auto-downgrade | 1.0 (drawing buffer 390×844) |
+
+> Correction: an earlier revision of this report quoted "~24 fps" mid-page. That
+> sample was taken at the closing chapter, where the stage is empty and there is
+> nothing to draw — it measured an idle scene. The figures above are sampled
+> with geometry actually on screen, which is why they are much lower.
 
 The last two rows are the useful result: the quality manager detected the slow
 software renderer, dropped to the low tier, and cut the drawing buffer from
@@ -118,13 +125,20 @@ observed, not assumed.
 | No page errors, no console errors or warnings | ✅ |
 | WebGL context created; first frame rendered | ✅ |
 | Adaptive quality engages and changes tier | ✅ (downgraded to tier 0 under software load) |
-| Horizontal touch drag rotates the sculpture | ✅ (rendered frame changed) |
+| Horizontal touch drag rotates the cube | ✅ (rendered frame changed) |
 | Vertical scrolling unaffected by drag handling | ✅ (`scrollY` unchanged during a horizontal drag) |
+| Cube reacts to a press (squash) | ✅ (rendered frame changed while held) |
+| Cube moves while being dragged | ✅ (rendered frame changed during the drag) |
+| Cube settles after release | ✅ (rendered frame changed again after release) |
 | Replay control returns to the opening | ✅ (no errors) |
 | `prefers-reduced-motion: reduce` | ✅ (renders, all reveals visible, no errors) |
 | WebGL unavailable | ✅ (static CSS fallback shown, canvas hidden, API absent, text readable, no errors) |
 | Render loop pauses when the page is hidden | ✅ (0 frames rendered while hidden) |
 | Render loop resumes when visible again | ✅ |
+
+The three interaction checks are isolated by pinning `prefers-reduced-motion`,
+which stops the ambient drift — so any change between the captured frames can
+only come from the pointer input itself.
 
 ## 8. What was not tested
 
@@ -137,9 +151,9 @@ not happen:
   real-device performance.
 - **No 5–10 minute session was run**, and no long-session memory growth was
   profiled. The only long-run risk identified by inspection is geometry LOD
-  objects being retained for all three tiers for the lifetime of the page —
-  a fixed, bounded cost (all LODs are built once at startup), not a leak.
-- **No repeated-interaction stress test** was run beyond a single drag gesture.
+  objects being retained for all three tiers for the lifetime of the page — a
+  fixed, bounded cost (all LODs are built once at startup), not a leak.
+- **No repeated-interaction stress test** was run beyond a few gestures.
 - Background-tab behaviour was verified by simulating the visibility state
   change and counting rendered frames; a real browser's tab throttling was not
   exercised.
@@ -153,10 +167,9 @@ not happen:
    paint, but it still occupies a single long task. On a real GPU this is
    expected to be far cheaper; if it were not, the next step would be to build
    the second composition lazily as chapter 04 approaches.
-2. **Software-rasteriser cost is dominated by the translucent glass**, which
-   covers a large screen area with `transparent`, `depthWrite: false` and a
-   double-sided material. On a GPU this is cheap; the tier system already
-   reduces resolution when it is not.
+2. **The translucent glass cubes in the cluster** cover a meaningful screen area
+   with `transparent`, `depthWrite: false` and a double-sided material. On a GPU
+   this is cheap; the tier system already reduces resolution when it is not.
 3. **Bundle size is essentially Three.js.** Further reduction would mean
    dropping to a hand-rolled WebGL renderer, which would trade a large amount
    of maintainability for bytes that are not currently scarce.

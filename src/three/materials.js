@@ -1,17 +1,33 @@
-/* Material library. Everything is procedural and cheap: PBR metallic
-   for chrome, fresnel-translucent physical for glass, and noise-displaced
-   standard for the organic forms. No textures, no transmission pass. */
+/* Material library. Everything is procedural and cheap: PBR metallic for
+   chrome, fresnel-translucent physical for glass, and noise-displaced
+   standard for the matte organic solids. No textures, no transmission pass. */
 import { Color, DoubleSide, MeshPhysicalMaterial, MeshStandardMaterial } from "three";
 import { glassFresnelInject, organicDisplaceInject } from "./shaders.js";
 
-export function createChrome(envMap) {
-  return new MeshStandardMaterial({
-    color: new Color(0xf4f2ee),
+export function createChrome(
+  envMap,
+  { color = 0xf4f2ee, roughness = 0.05, envMapIntensity = 1.45, displace = null } = {}
+) {
+  const material = new MeshStandardMaterial({
+    color: new Color(color),
     metalness: 1.0,
-    roughness: 0.05,
+    roughness,
     envMap,
-    envMapIntensity: 1.45,
+    envMapIntensity,
   });
+
+  if (displace) {
+    const uniforms = {
+      uTime: { value: 0 },
+      uAmp: { value: displace.amp ?? 0.05 },
+      uFreq: { value: displace.freq ?? 1.2 },
+      uSpeed: { value: displace.speed ?? 0.16 },
+    };
+    organicDisplaceInject(material, uniforms);
+    material.userData.uniforms = uniforms;
+  }
+
+  return material;
 }
 
 export function createGlass(envMap, tint = 0xeaf1f4) {

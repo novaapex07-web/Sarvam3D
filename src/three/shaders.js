@@ -89,7 +89,10 @@ export function organicDisplaceInject(material, uniforms, cacheKey = "organic") 
       vec3 objectNormal = vec3(normal);
       {
         const float ofEps = 0.035;
-        vec3 ofT1 = normalize(cross(objectNormal, vec3(0.0, 1.0, 0.0)) + vec3(0.0001, 0.0001, 0.0001));
+        /* Pick a reference axis that is not parallel to the normal, or the
+           cross product degenerates on flat faces such as a box lid. */
+        vec3 ofRef = abs(objectNormal.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+        vec3 ofT1 = normalize(cross(objectNormal, ofRef) + vec3(0.0001));
         vec3 ofT2 = normalize(cross(objectNormal, ofT1));
         float ofD0 = ofDisp(position);
         float ofD1 = ofDisp(position + ofT1 * ofEps);
